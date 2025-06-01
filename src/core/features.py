@@ -1,3 +1,6 @@
+from .tensor import Tensor
+import numpy as np
+
 class FeatureExtractor:
     """Feature extractor for time series data."""
     
