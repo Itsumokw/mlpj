@@ -1,4 +1,3 @@
-from .tensor import Tensor
 import torch
 
 class Function:
@@ -9,6 +8,9 @@ class Function:
 class Add(Function):
     @staticmethod
     def apply(a, b):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(a.data + b.data)
         if a.requires_grad or b.requires_grad:
             out.requires_grad = True
@@ -23,6 +25,9 @@ class Add(Function):
 class Multiply(Function):
     @staticmethod
     def apply(a, b):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(a.data * b.data)
         if a.requires_grad or b.requires_grad:
             out.requires_grad = True
@@ -37,6 +42,9 @@ class Multiply(Function):
 class ReLU(Function):
     @staticmethod
     def apply(x):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(torch.maximum(x.data, torch.tensor(0.)))
         
         if x.requires_grad:
@@ -53,6 +61,9 @@ class ReLU(Function):
 class Transpose(Function):
     @staticmethod
     def apply(x, dim0, dim1):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(x.data.transpose(dim0, dim1))
         
         if x.requires_grad:
@@ -68,6 +79,9 @@ class Transpose(Function):
 class ElementwiseMultiply(Function):
     @staticmethod
     def apply(a, b):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         if not isinstance(b, Tensor):
             b = Tensor(b)
         out = Tensor(a.data * b.data)
@@ -93,6 +107,9 @@ class ElementwiseMultiply(Function):
 class MatMul(Function):
     @staticmethod
     def apply(a, b):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(torch.matmul(a.data, b.data))
         
         if a.requires_grad or b.requires_grad:
@@ -114,6 +131,9 @@ class MatMul(Function):
 class View(Function):
     @staticmethod
     def apply(x, shape):
+        # Import Tensor at runtime to avoid circular import
+        from .tensor import Tensor
+        
         out = Tensor(x.data.view(*shape))
         
         if x.requires_grad:

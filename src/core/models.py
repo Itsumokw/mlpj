@@ -1,14 +1,27 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from typing import Optional, List, Dict  # Add this import
 from .nn.modules import Module, Linear, Conv1d, Sequential, LayerNorm, ReLU, Dropout, GlobalAveragePool, Attention, ModuleList
 from .nn import functional as F
+from .tensor import Tensor  # Import Tensor class
 
 class BaseModel(Module):
     """Base class for all models"""
     def __init__(self):
         super().__init__()
         self.is_fitted = False
+        self._parameters: Dict[str, nn.Parameter] = {}  # Add type hint
+
+    def register_parameter(self, name: str, param: Optional[nn.Parameter]) -> None:
+        """Register a parameter with the model.
+        
+        Args:
+            name: Name of the parameter
+            param: Parameter to register
+        """
+        if param is not None:
+            self._parameters[name] = param
 
     def forward(self, x, features=None):
         """Forward pass of the model with both raw data and extracted features.
@@ -39,50 +52,74 @@ class BaseModel(Module):
 class SimpleARIMA(BaseModel):
     """Simplified ARIMA model for time series prediction."""
     
-    def __init__(self, p=3, feature_size=0):
+    def __init__(self, p=3, feature_size=0, output_steps=10):
         super().__init__()
         self.p = p
         self.feature_size = feature_size
-        self.coef_ = nn.Parameter(torch.randn(p))
-        self.feature_weights = nn.Parameter(torch.randn(feature_size)) if feature_size > 0 else None
-        self.bias = nn.Parameter(torch.zeros(1))
+        self.output_steps = output_steps
+        
+        # Create parameters using our Tensor class
+        self.coef_ = Tensor(torch.randn(p), requires_grad=True)
+        self.bias = Tensor(torch.zeros(1), requires_grad=True)
+        
+        if feature_size > 0:
+            self.feature_weights = Tensor(torch.randn(feature_size), requires_grad=True)
+        else:
+            self.feature_weights = None
+            
+        # Register parameters
+        self._parameters = {
+            'coef_': self.coef_,
+            'bias': self.bias
+        }
+        if self.feature_weights is not None:
+            self._parameters['feature_weights'] = self.feature_weights
 
     def forward(self, x, features=None):
-        # x shape: (batch_size, sequence_length)
-        # features shape: (batch_size, sequence_length, feature_size)
-        batch_size = x.shape[0]
-        pred = []
+        """Forward pass of ARIMA model.
         
-        for i in range(self.p, x.shape[1]):
+        Args:
+            x: Input tensor of shape (batch_size, seq_length, input_dim)
+            features: Optional extracted features
+            
+        Returns:
+            Predictions tensor of shape (batch_size, output_steps, 1)
+        """
+        # Handle input shape
+        if x.data.ndim == 3:
+            batch_size, seq_length, input_dim = x.data.shape
+            x = Tensor(x.data.squeeze(-1))
+        else:
+            batch_size, seq_length = x.data.shape
+            
+        # Only predict the requested number of steps
+        start_idx = seq_length - self.output_steps
+        predictions = []
+        
+        for i in range(start_idx, seq_length):
+            # Get window of past values
             window = x[:, i-self.p:i]
-            pred_i = torch.sum(window * self.coef_, dim=1)
+            pred = (window @ self.coef_)
+            if isinstance(pred, Tensor):
+                pred = pred.reshape(-1, 1)
+            else:
+                pred = Tensor(pred.reshape(-1, 1))
             
+            # Add feature contribution if available
             if features is not None and self.feature_weights is not None:
-                feat_contribution = torch.sum(features[:, i] * self.feature_weights, dim=1)
-                pred_i = pred_i + feat_contribution
-                
-            pred_i = pred_i + self.bias
-            pred.append(pred_i)
+                if features.data.ndim == 3:
+                    feat = features.data[:, min(i, features.data.shape[1]-1), :]
+                else:
+                    feat = features.data[:, min(i, features.data.shape[1]-1)]
+                feat_contribution = Tensor(feat) @ self.feature_weights
+                pred = pred + feat_contribution.reshape(-1, 1)
             
-        return torch.stack(pred, dim=1)
-
-    def fit(self, X, y, epochs=100, lr=0.01):
-        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
-        criterion = nn.MSELoss()
-        
-        for epoch in range(epochs):
-            optimizer.zero_grad()
-            y_pred = self.forward(X)
-            loss = criterion(y_pred, y[:, self.p:])
-            loss.backward()
-            optimizer.step()
-        
-        self.is_fitted = True
-
-    def predict(self, X, steps=1):
-        with torch.no_grad():
-            preds = self.forward(X)
-            return preds[:, -steps:]
+            # Add bias term
+            pred = pred + self.bias
+            predictions.append(pred)
+            
+        # Concatenate predictions along sequence dimension
+        return Tensor(torch.cat([p.data for p in predictions], dim=1).unsqueeze(-1))
 
 
 class ARIMA(BaseModel):
@@ -300,27 +337,27 @@ class EnhancedTCN(BaseModel):
     """Enhanced Temporal Convolutional Network with residual connections and dilated convolutions."""
     
     class DilatedResidualBlock(Module):
+        """Dilated Residual Block with skip connection."""
+        
         def __init__(self, channels, kernel_size, dilation):
-            super().__init__()
-            self.conv1 = Conv1d(channels, channels, kernel_size, 
-                              padding='same', dilation=dilation)
-            self.conv2 = Conv1d(channels, channels, kernel_size, 
-                              padding='same', dilation=dilation)
-            self.layernorm1 = nn.LayerNorm(channels)
-            self.layernorm2 = nn.LayerNorm(channels)
-            self.dropout = nn.Dropout(0.1)
+            super().__init__()  # Need to call Module's __init__
+            self.conv_block1 = Sequential(
+                Conv1d(channels, channels, kernel_size, dilation=dilation, padding='same'),
+                LayerNorm(channels),
+                ReLU(),
+                Dropout(0.1)
+            )
+            self.conv_block2 = Sequential(
+                Conv1d(channels, channels, kernel_size, dilation=dilation, padding='same'),
+                LayerNorm(channels),
+                ReLU(),
+                Dropout(0.1)
+            )
             
         def forward(self, x):
             identity = x
-            
-            out = self.layernorm1(x)
-            out = F.relu(self.conv1(out))
-            out = self.dropout(out)
-            
-            out = self.layernorm2(out)
-            out = self.conv2(out)
-            out = self.dropout(out)
-            
+            out = self.conv_block1(x)
+            out = self.conv_block2(out)
             return F.relu(out + identity)
     
     def __init__(self, input_size=1, feature_size=0, hidden_size=32, 
@@ -333,7 +370,7 @@ class EnhancedTCN(BaseModel):
         self.input_proj = Conv1d(total_input, hidden_size, 1)
         
         # Dilated convolution blocks
-        self.blocks = nn.ModuleList([
+        self.blocks = ModuleList([
             self.DilatedResidualBlock(
                 hidden_size, kernel_size, dilation=2**i
             ) for i in range(num_layers)

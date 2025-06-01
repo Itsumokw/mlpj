@@ -5,6 +5,11 @@ class MSELoss:
     """Mean Squared Error Loss."""
     
     def __call__(self, pred: Tensor, target: Tensor) -> Tensor:
+        # Ensure shapes match
+        if pred.data.shape != target.data.shape:
+            raise ValueError(f"Shape mismatch: predictions have shape {pred.data.shape} "
+                          f"but targets have shape {target.data.shape}")
+            
         error = pred.data - target.data
         loss = Tensor((error ** 2).mean())
         

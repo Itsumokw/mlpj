@@ -70,40 +70,64 @@ class Linear(Module):
         return out
 
 class Conv1d(Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
+    """1D Convolution layer."""
+    
+    def __init__(self, in_channels, out_channels, kernel_size, 
+                 stride=1, padding=0, dilation=1):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
+        self.dilation = dilation
         
+        # Initialize weights using Kaiming initialization
         self.weight = Tensor(
-            torch.randn(out_channels, in_channels, kernel_size) / np.sqrt(in_channels * kernel_size),
+            kaiming_normal(torch.empty(out_channels, in_channels, kernel_size)),
             requires_grad=True
         )
-        self.bias = Tensor(
-            torch.zeros(out_channels),
-            requires_grad=True
-        )
+        self.bias = Tensor(torch.zeros(out_channels), requires_grad=True)
+        
         self._parameters = {'weight': self.weight, 'bias': self.bias}
         
     def forward(self, x):
         batch_size, in_channels, seq_len = x.shape
-        if self.padding:
-            pad_size = self.padding if isinstance(self.padding, int) else self.padding[0]
+        
+        # Handle padding
+        if isinstance(self.padding, str) and self.padding == 'same':
+            pad_size = ((self.kernel_size - 1) * self.dilation) // 2
+        else:
+            pad_size = self.padding
+            
+        if pad_size > 0:
             x = F.pad(x, (pad_size, pad_size))
             
-        out_len = (seq_len + 2 * self.padding - self.kernel_size) // self.stride + 1
+        # Calculate output length
+        out_len = ((seq_len + 2 * pad_size - self.dilation * (self.kernel_size - 1) - 1) 
+                  // self.stride + 1)
+        
+        # Initialize output tensor
         out = torch.zeros(batch_size, self.out_channels, out_len)
         
+        # Perform convolution with dilation
         for b in range(batch_size):
             for c_out in range(self.out_channels):
                 for c_in in range(self.in_channels):
-                    for i in range(0, seq_len - self.kernel_size + 1, self.stride):
-                        out[b, c_out, i//self.stride] += torch.sum(
-                            x[b, c_in, i:i+self.kernel_size] * self.weight[c_out, c_in]
-                        )
+                    for i in range(0, seq_len - (self.kernel_size-1)*self.dilation, self.stride):
+                        # Apply dilated convolution
+                        kernel_index = 0
+                        conv_sum = 0
+                        for k in range(0, self.kernel_size * self.dilation, self.dilation):
+                            if i + k < seq_len:
+                                conv_sum += (x[b, c_in, i+k] * 
+                                          self.weight[c_out, c_in, kernel_index])
+                            kernel_index += 1
+                        out_idx = i // self.stride
+                        if out_idx < out_len:
+                            out[b, c_out, out_idx] += conv_sum
+        
+        # Add bias
         return Tensor(out + self.bias.view(1, -1, 1))
 
 class BatchNorm1d(Module):

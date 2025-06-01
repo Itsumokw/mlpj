@@ -1,0 +1,6 @@
+src/__pycache__/*
+src/core/__pycache__/*
+src/core/nn/__pycache__/*
+src/data/__pycache__/*
+src/utils/__pycache__/*
+src/visualization/__pycache__/*
