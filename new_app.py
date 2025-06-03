@@ -7,29 +7,61 @@ from sklearn.preprocessing import MinMaxScaler
 import time
 
 # 设置页面布局
-st.set_page_config(layout="wide", page_title="ARIMA Time Series Forecasting")
-st.title("✈️ Air Passengers Forecasting with Neural ARIMA")
+st.set_page_config(layout="wide", page_title="Time Series Forecasting Lab")
+st.title("⏳ Time Series Forecasting Lab")
 st.markdown("""
-This application demonstrates a neural network-based ARIMA model for forecasting monthly airline passengers.
-The model incorporates both autoregressive (AR) and moving average (MA) components, along with seasonal features.
+Interactive platform for comparing time series forecasting models. 
+Currently featuring Neural ARIMA, with more models coming soon!
 """)
 
 # 侧边栏配置
 with st.sidebar:
     st.header("⚙️ Model Configuration")
 
-    # 模型参数
-    p = st.slider("AR Order (p)", 1, 24, 12, 1,
-                  help="Number of lag observations included in the model (autoregressive part)")
-    q = st.slider("MA Order (q)", 1, 12, 1, 1,
-                  help="Size of the moving average window")
-    hidden_size = st.slider("Hidden Layer Size", 16, 128, 64, 16)
-    lr = st.slider("Learning Rate", 0.001, 0.1, 0.005, 0.001)
-    epochs = st.slider("Training Epochs", 100, 2000, 500, 100)
-    alpha = st.slider("MA Loss Weight (α)", 0.01, 0.5, 0.1, 0.01,
-                      help="Weight for moving average component in loss function")
+    # 模型选择 - 目前只有 ARIMA 可用
+    model_options = {
+        "Neural ARIMA": "ARIMA",
+        "LSTM (Coming Soon)": "LSTM",
+        "TCN (Coming Soon)": "TCN",
+        "Transformer (Coming Soon)": "Transformer"
+    }
+    selected_model = st.selectbox(
+        "Select Model",
+        list(model_options.keys()),
+        index=0,
+        help="Currently only Neural ARIMA is available. More models coming soon!"
+    )
+
+    st.markdown(f"**Selected Model:** `{selected_model}`")
+
+    # 显示模型描述
+    model_descriptions = {
+        "Neural ARIMA": "Combines ARIMA concepts with neural networks. Handles seasonality and trends.",
+        "LSTM (Coming Soon)": "Long Short-Term Memory networks for sequence prediction",
+        "TCN (Coming Soon)": "Temporal Convolutional Networks with dilated convolutions",
+        "Transformer (Coming Soon)": "Attention-based models for sequence-to-sequence prediction"
+    }
+    st.info(model_descriptions[selected_model])
+
+    st.divider()
+
+    # 模型参数 - 仅当选择 ARIMA 时显示
+    if "ARIMA" in selected_model:
+        st.subheader("ARIMA Parameters")
+        p = st.slider("AR Order (p)", 1, 24, 12, 1,
+                      help="Number of lag observations included in the model (autoregressive part)")
+        q = st.slider("MA Order (q)", 1, 12, 1, 1,
+                      help="Size of the moving average window")
+        hidden_size = st.slider("Hidden Layer Size", 16, 128, 64, 16)
+        lr = st.slider("Learning Rate", 0.001, 0.1, 0.005, 0.001)
+        epochs = st.slider("Training Epochs", 100, 2000, 500, 100)
+        alpha = st.slider("MA Loss Weight (α)", 0.01, 0.5, 0.1, 0.01,
+                          help="Weight for moving average component in loss function")
+
+    st.divider()
 
     # 数据选项
+    st.subheader("Data Options")
     show_data = st.checkbox("Show Raw Data", True)
     show_diff = st.checkbox("Show Differenced Data", False)
 
@@ -348,7 +380,10 @@ def forecast_future(model, last_values, months_ahead, month_features, p, q, scal
 
 
 # 主应用逻辑
-if train_button:
+if train_button and "ARIMA" in selected_model:
+    # 显示模型训练标题
+    st.subheader(f"🔧 Training {selected_model}")
+
     # 预处理数据
     with st.spinner("Preprocessing data..."):
         preprocessed_data = preprocess_data(passengers, months, p, q)
@@ -375,7 +410,7 @@ if train_button:
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # 训练模型
-    st.subheader("Model Training")
+    st.subheader("Training Progress")
     model, losses = train_model(
         model,
         preprocessed_data['X_train'],
@@ -386,13 +421,16 @@ if train_button:
     )
 
     # 显示训练损失
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.plot(losses)
-    ax.set_title("Training Loss")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Loss")
-    ax.grid(True)
-    st.pyplot(fig)
+    st.subheader("Training Performance")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(losses)
+        ax.set_title("Training Loss")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.grid(True)
+        st.pyplot(fig)
 
     # 评估模型
     with st.spinner("Evaluating model..."):
@@ -405,12 +443,15 @@ if train_button:
         )
 
     # 显示评估结果
-    st.subheader("Model Evaluation")
-    st.metric("Test RMSE", f"{results['rmse']:.2f}")
-    st.metric("Test RMSE as % of mean",
-              f"{results['rmse'] / np.mean(preprocessed_data['original']) * 100:.1f}%")
+    with col2:
+        st.metric("Test RMSE", f"{results['rmse']:.2f}")
+        st.metric("Test RMSE as % of mean",
+                  f"{results['rmse'] / np.mean(preprocessed_data['original']) * 100:.1f}%")
+        st.metric("Training Time", f"{epochs} epochs")
+        st.metric("Model Parameters", f"{sum(p.numel() for p in model.parameters()):,}")
 
     # 显示预测结果
+    st.subheader("Model Predictions")
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # 原始数据
@@ -427,7 +468,7 @@ if train_button:
     ax.plot(last_year_indices, preprocessed_data['original'][-12:], 'g-', alpha=0.7)
 
     ax.axvline(x=results['test_start_idx'], color='k', linestyle='--', label='Train/Test Split')
-    ax.set_title("ARIMA Model Predictions with Seasonal Features")
+    ax.set_title(f"{selected_model} Predictions")
     ax.set_xlabel("Time Steps")
     ax.set_ylabel("Passengers")
     ax.legend()
@@ -497,19 +538,35 @@ if train_button:
     })
     st.dataframe(forecast_df.style.format({"Forecasted Passengers": "{:,.0f}"}))
 
-# 添加说明
+    # 模型结构可视化
+    st.subheader("Model Architecture")
+    st.code(f"""
+    Neural ARIMA Model:
+    - Input Size: {input_size} (AR: {p}, MA: {q}, Seasonal: 12)
+    - Hidden Layers: 2 x {hidden_size} neurons
+    - Output Size: 1
+    - Activation: ReLU
+    - Loss Function: MSE + α*MA (α={alpha})
+    """)
+
+elif train_button and "ARIMA" not in selected_model:
+    st.warning("⚠️ This model is not yet available. Only Neural ARIMA is currently implemented.")
+    st.info("We're working hard to add more models soon! Stay tuned for updates.")
+
+# 添加模型路线图
+st.sidebar.divider()
+st.sidebar.subheader("Model Roadmap")
 st.sidebar.markdown("""
-**Model Notes:**
-- This neural ARIMA model combines traditional time series concepts with deep learning
-- AR (Autoregressive) component uses past observations
-- MA (Moving Average) component models forecast errors
-- Seasonal features are incorporated via month one-hot encoding
+- ✅ **Neural ARIMA** (Available now)
+- ⏳ LSTM (Q3 2024)
+- ⏳ TCN (Q4 2024)
+- ⏳ Transformer (Q1 2025)
 """)
 
 # 添加作者信息
-st.sidebar.markdown("---")
+st.sidebar.divider()
 st.sidebar.info("""
-**Developed by:** [Your Name]  
-**Dataset:** Monthly Air Passengers (1949-1960)  
-**Model:** Neural ARIMA with Seasonal Features
+**Developed by:** Data Science Lab  
+**Version:** 1.0.0  
+**Last Updated:** June 2024
 """)
