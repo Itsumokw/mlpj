@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 
 # 加载数据
-data = pd.read_csv('C:\\Users\\Administrator\\.cache\\kagglehub\\datasets\\rakannimer\\air-passengers\\versions\\1\\AirPassengers.csv')
+data = pd.read_csv('datasets/rakannimer/air-passengers/versions/1/AirPassengers.csv')
 passengers = data['#Passengers'].values.astype(float)
 months = [int(m.split('-')[1]) for m in data['Month']]  # 提取月份信息
 
