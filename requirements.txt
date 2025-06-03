@@ -1,4 +1,7 @@
+streamlit
 numpy
-torch
+pandas
 matplotlib
-pytest
+seaborn
+torch
+scikit-learn
