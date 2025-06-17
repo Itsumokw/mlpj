@@ -139,3 +139,53 @@ class TCN(nn.Module, BaseEstimator):
                 
             predictions = self(X_tensor).cpu().numpy().flatten()
         return predictions
+    
+# Enhanced TCN 实现
+class EnhancedTCN(TCN):
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, 
+                 lr=0.001, epochs=200, batch_size=16):
+        super().__init__(input_size, output_size, num_channels, kernel_size, dropout, 
+                          lr, epochs, batch_size)
+        
+        # 添加额外的全连接层和dropout
+        self.linear = nn.Sequential(
+            nn.Linear(num_channels[-1], num_channels[-1] * 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(num_channels[-1] * 2, output_size)
+        )
+        
+    def forward(self, x):
+        x = x.permute(0, 2, 1)  # 转换为 (batch_size, input_size, sequence_length)
+        y = self.tcn(x)
+        y = self.linear(y[:, :, -1])
+        return y
+
+# Advanced TCN 实现
+class AdvancedTCN(TCN):
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout, 
+                 lr=0.001, epochs=200, batch_size=16):
+        super().__init__(input_size, output_size, num_channels, kernel_size, dropout, 
+                          lr, epochs, batch_size)
+        
+        # 添加更复杂的输出层
+        self.linear = nn.Sequential(
+            nn.Linear(num_channels[-1], num_channels[-1] * 2),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(num_channels[-1] * 2, num_channels[-1]),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(num_channels[-1], output_size)
+        )
+        
+        # 添加批归一化
+        self.bn = nn.BatchNorm1d(num_channels[-1])
+        
+    def forward(self, x):
+        x = x.permute(0, 2, 1)  # 转换为 (batch_size, input_size, sequence_length)
+        y = self.tcn(x)
+        y = y[:, :, -1]  # 取最后时间步
+        y = self.bn(y)   # 应用批归一化
+        y = self.linear(y)
+        return y

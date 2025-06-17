@@ -5,7 +5,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 import torch
 from models.arima import NeuralARIMA
-from models.tcn import TCN
+from models.tcn import TCN, EnhancedTCN, AdvancedTCN
 from models.gru import TimeGRU
 from models.linear import TimeLinear
 from typing import Dict, Any, Tuple
@@ -40,7 +40,15 @@ class ModelTrainer:
             )
         
         elif "TCN" in model_type:
-            return TCN(
+            if model_type == "Lite TCN":
+                model_class = TCN
+            elif model_type == "Enhanced TCN":
+                model_class = EnhancedTCN
+            elif model_type == "Advanced TCN":
+                model_class = AdvancedTCN
+            else:
+                model_class = TCN
+            return model_class(
                 input_size=1,
                 output_size=1,
                 num_channels=[config['hidden_size']] * config['num_layers'],
@@ -107,7 +115,7 @@ class ModelTrainer:
             # 评估模型
             train_pred = model.predict(X_train)
             test_pred = model.predict(X_test)
-            logger.info(f"scaler: {train_data['scaler']}")
+            # logger.info(f"scaler: {train_data['scaler']}")
             
             # 计算RMSE - 添加空数据检查
             if len(y_train) > 0:
@@ -131,7 +139,7 @@ class ModelTrainer:
             train_pred_orig = inverse_transform(train_pred)
             test_pred_orig = inverse_transform(test_pred)
             actuals_orig = inverse_transform(y_train.tolist() + y_test.tolist())
-            logger.info(f"train_pred: {train_pred[:5]}, test_pred: {test_pred[:5]}, train_pred_orig: {train_pred_orig[:5]}, test_pred_orig: {test_pred_orig[:5]}")
+            # logger.info(f"train_pred: {train_pred[:5]}, test_pred: {test_pred[:5]}, train_pred_orig: {train_pred_orig[:5]}, test_pred_orig: {test_pred_orig[:5]}")
             
             # 准备模型状态
             model_state = {

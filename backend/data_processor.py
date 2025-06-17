@@ -72,7 +72,7 @@ def process_data(request: PreprocessRequest) -> PreprocessResponse:
             last_values=last_values,
             dates=dates
         )
-        print(response.json())
+        # print(response.json())
         logger.info("Data processing completed successfully")
         return response
     except Exception as e:
@@ -97,11 +97,11 @@ def process_data(request: PreprocessRequest) -> PreprocessResponse:
             error=str(e)
         )
     
-process_data(PreprocessRequest(
-    dataset_name="Air Passengers (Default)",
-    time_col="Month",
-    value_col="#Passengers",
-    custom_data=None,
-    p=12,
-    q=1
-))
+# process_data(PreprocessRequest(
+#     dataset_name="Air Passengers (Default)",
+#     time_col="Month",
+#     value_col="#Passengers",
+#     custom_data=None,
+#     p=12,
+#     q=1
+# ))

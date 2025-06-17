@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import torch
 from models.arima import NeuralARIMA
-from models.tcn import TCN
+from models.tcn import TCN, EnhancedTCN, AdvancedTCN
 from models.gru import TimeGRU
 from models.linear import TimeLinear
 from typing import Any, Dict, List
@@ -13,8 +13,8 @@ class ForecastPredictor:
         self.models = {
             "Neural ARIMA": NeuralARIMA,
             "Lite TCN": TCN,
-            "Enhanced TCN": TCN,
-            "Advanced TCN": TCN,
+            "Enhanced TCN": EnhancedTCN,  # 映射到新类
+            "Advanced TCN": AdvancedTCN,  # 映射到新类
             "Time GRU": TimeGRU,
             "Time CNN": TCN,  # 暂时使用TCN代替
             "Time Linear": TimeLinear
@@ -33,6 +33,7 @@ class ForecastPredictor:
         model = model_class(**params)
         
         # 加载模型状态
+        
         model.load_state_dict(model_state["state_dict"])
         
         return model
@@ -146,6 +147,9 @@ class ForecastPredictor:
         """TCN模型的多步预测方法（递归预测）"""
         predictions = []
         current_seq = last_values.copy()  # 复制初始序列
+
+        data_min = scaler.data_min_[0]
+        data_max = scaler.data_max_[0]
         
         for _ in range(steps):
             # 准备输入数据：形状为 (1, sequence_length, 1)
@@ -153,6 +157,9 @@ class ForecastPredictor:
             
             # 预测下一步
             pred = model.predict(input_seq)[0]
+
+            pred = np.clip(pred, 0, 1)  # 确保在[0,1]范围内
+
             predictions.append(pred)
             
             # 更新序列：移除第一个值，添加新预测值
@@ -224,6 +231,9 @@ class ForecastPredictor:
                 # 转换为numpy数组再转为PyTorch张量
                 tensor = torch.from_numpy(np.array(value)).float()
                 state_dict[key] = tensor
+            elif isinstance(value, (int, float)):  # 标量张量
+                # 创建0维张量
+                state_dict[key] = torch.tensor(value)
             else:
                 state_dict[key] = value
         return state_dict
