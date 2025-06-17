@@ -2,7 +2,7 @@ import requests
 import streamlit as st
 
 # 后端服务地址（根据实际部署调整）
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "http://127.0.0.1:8080"
 
 
 def preprocess_data(config):
@@ -97,7 +97,9 @@ def forecast(config, model_state):
             "model_state": model_state,
             "forecast_months": config["forecast_months"],
             "last_values": model_state.get("last_values", []),
-            "output_steps": config.get("output_steps", 12)
+            "output_steps": config.get("output_steps", 12),
+            "dates": model_state.get("dates", []),
+            "scaler": model_state.get("scaler", {})
         }
 
         response = requests.post(

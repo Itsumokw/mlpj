@@ -50,18 +50,24 @@ class FeatureExtractor:
         """Extract features from time series data.
         
         Args:
-            X: Input time series data of shape (batch_size, sequence_length)
+            X: Input time series data of shape (batch_size, sequence_length, features) 
+               or (batch_size, sequence_length)
         
         Returns:
             Feature matrix of shape (batch_size, sequence_length - window_size + 1, n_features)
         """
-        # Handle batch dimension
-        if X.ndim == 3:  # (batch_size, sequence_length, 1)
-            X = X.squeeze(-1)
-        elif X.ndim == 1:  # Single sequence
-            X = X[np.newaxis, :]
-            
-        batch_size, seq_length = X.shape
+        # Handle different input shapes
+        if X.ndim == 3:
+            batch_size, seq_length, n_features = X.shape
+            if n_features == 1:
+                X = X.squeeze(-1)
+            else:
+                raise ValueError(f"Expected 1 feature, got {n_features}")
+        elif X.ndim == 2:
+            batch_size, seq_length = X.shape
+        else:
+            raise ValueError(f"Expected 2D or 3D input, got shape {X.shape}")
+        
         if seq_length < self.window_size:
             raise ValueError(f"Sequence length ({seq_length}) must be >= window_size ({self.window_size})")
             
@@ -70,7 +76,6 @@ class FeatureExtractor:
         for i in range(batch_size):
             # Generate sliding windows
             windows = self.sliding_window(X[i], self.window_size)
-            n_windows = len(windows)
             
             # Extract features for each window
             sequence_features = []

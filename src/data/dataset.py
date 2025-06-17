@@ -21,23 +21,37 @@ class Dataset:
         return self.data[indices], self.labels[indices]
     
 class TimeSeriesDataset:
-    """Dataset class for time series data with multi-step prediction support."""
+    """Dataset class for time series data with features."""
     
-    def __init__(self, data, window_size, target_size=1, stride=1):
-        self.data = torch.tensor(data, dtype=torch.float32)
-        self.window_size = window_size
-        self.target_size = target_size
-        self.stride = stride
+    def __init__(self, features, targets):
+        """Initialize TimeSeriesDataset.
+        
+        Args:
+            features: Array of shape (n_samples, seq_length, n_features)
+            targets: Array of shape (n_samples, prediction_steps, 1)
+        """
+        # Convert arrays to tensors if needed
+        if not isinstance(features, torch.Tensor):
+            features = torch.tensor(features, dtype=torch.float32)
+        if not isinstance(targets, torch.Tensor):
+            targets = torch.tensor(targets, dtype=torch.float32)
+            
+        self.features = features
+        self.targets = targets
         
     def __len__(self):
-        return (len(self.data) - self.window_size - self.target_size) // self.stride + 1
+        """Return the number of samples in the dataset."""
+        return len(self.features)
         
     def __getitem__(self, idx):
-        start_idx = idx * self.stride
-        end_idx = start_idx + self.window_size
-        target_idx = end_idx + self.target_size
+        """Get a single sample from the dataset.
         
-        x = self.data[start_idx:end_idx]
-        y = self.data[end_idx:target_idx]
-        
-        return x, y
+        Args:
+            idx: Index of the sample
+            
+        Returns:
+            tuple: (features, target) where:
+                features is a tensor of shape (seq_length, n_features)
+                target is a tensor of shape (prediction_steps, 1)
+        """
+        return self.features[idx], self.targets[idx]

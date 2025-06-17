@@ -57,6 +57,11 @@ if st.session_state.get('train_button_clicked'):
     # 步骤1: 数据预处理
     with st.spinner("Preprocessing data..."):
         preprocessed_data = preprocess_data(st.session_state.model_config)
+        # 验证数据结构
+        required_keys = ['X_train', 'y_train', 'X_test', 'y_test', 'scaler', 'last_values', 'dates']
+        if not all(key in preprocessed_data for key in required_keys):
+            st.error("Preprocessed data is missing required fields")
+            
 
         if preprocessed_data:
             st.session_state.preprocessed_data = preprocessed_data
@@ -91,7 +96,7 @@ if st.session_state.training_job_id and st.session_state.training_results is Non
 
         if status['status'] == 'completed':
             st.session_state.training_results = status['results']
-            st.experimental_rerun()  # 触发重新运行以更新显示
+            st.rerun()  # 触发重新运行以更新显示
             break
         elif status['status'] == 'training':
             time.sleep(5)  # 每5秒轮询一次

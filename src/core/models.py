@@ -96,7 +96,7 @@ class SimpleARIMA(BaseModel):
         start_idx = seq_length - self.output_steps
         predictions = []
         
-        for i in range(start_idx, seq_length):
+        for i in start_idx, seq_length:
             # Get window of past values
             window = x[:, i-self.p:i]
             pred = (window @ self.coef_)
@@ -123,85 +123,106 @@ class SimpleARIMA(BaseModel):
 
 
 class ARIMA(BaseModel):
-    """Complete ARIMA implementation with differencing and moving average."""
-    
-    def __init__(self, p=1, d=0, q=0, feature_size=0):
+    def __init__(self, p=1, d=0, q=0, feature_size=0, output_steps=10):
         super().__init__()
         self.p = p  # AR order
-        self.d = d  # Differencing order
+        self.d = d  # Difference order
         self.q = q  # MA order
         self.feature_size = feature_size
+        self.output_steps = output_steps
         
-        # AR parameters
-        self.ar_coef = nn.Parameter(torch.randn(p))
-        # MA parameters
-        self.ma_coef = nn.Parameter(torch.randn(q)) if q > 0 else None
-        # Feature weights
-        self.feature_weights = nn.Parameter(torch.randn(feature_size)) if feature_size > 0 else None
-        self.bias = nn.Parameter(torch.zeros(1))
+        # Neural network layers for AR, MA and seasonal components
+        self.fc1 = Linear(p + q + feature_size, 64)  # Combined input features
+        self.fc2 = Linear(64, 64)
+        self.fc3 = Linear(64, output_steps)
+        self.relu = ReLU()
         
-    def difference(self, x, order=1):
-        """Apply difference transformation of given order."""
-        diff_x = x
-        for _ in range(order):
-            diff_x = diff_x[:, 1:] - diff_x[:, :-1]
-        return diff_x
+    def difference(self, x: Tensor, interval: int = 1) -> Tensor:
+        """Apply differencing of specified interval."""
+        if isinstance(x, Tensor):
+            data = x.data
+        else:
+            data = x
+            
+        return Tensor([data[i] - data[i - interval] for i in range(interval, len(data))])
     
-    def inverse_difference(self, diff_x, x_orig, order=1):
-        """Reverse differencing transformation."""
-        restored = diff_x
-        for _ in range(order):
-            restored = torch.cumsum(restored, dim=1)
-            restored = torch.cat([x_orig[:, :1], restored], dim=1)
-        return restored
+    def inverse_difference(self, diff_values: Tensor, last_obs: Tensor) -> Tensor:
+        """Inverse operation of differencing."""
+        if isinstance(diff_values, Tensor):
+            diff_data = diff_values.data
+        else:
+            diff_data = diff_values
+            
+        if isinstance(last_obs, Tensor):
+            last_data = last_obs.data
+        else:
+            last_data = last_obs
+            
+        return Tensor(last_data + diff_data)
     
     def forward(self, x, features=None):
-        batch_size = x.shape[0]
+        """Forward pass of ARIMA model."""
+        # Handle input shape
+        if x.data.ndim == 3:
+            batch_size, seq_length, input_dim = x.shape
+            x = Tensor(x.data[:, :, 0])  # Only take first feature
+        else:
+            batch_size, seq_length = x.shape
+            
+        # Store original data for inverse differencing
+        x_orig = x
         
-        # Apply differencing if d > 0
+        # Apply differencing if needed
         if self.d > 0:
-            x_orig = x
             x = self.difference(x, self.d)
-        
-        # Store residuals for MA component
-        residuals = []
+            
+        # Initialize lists for predictions and errors
         predictions = []
+        errors = []
         
-        for i in range(max(self.p, self.q), x.shape[1]):
-            # AR component
-            if self.p > 0:
-                ar_term = torch.sum(x[:, i-self.p:i] * self.ar_coef, dim=1)
+        # Calculate start index
+        start_idx = max(self.p, seq_length - self.output_steps)
+        
+        for i in range(start_idx, seq_length):
+            # AR features: past p values
+            ar_features = x[:, i-self.p:i]
+            
+            # MA features: past q errors
+            if len(errors) >= self.q:
+                ma_features = torch.stack(errors[-self.q:], dim=1)
             else:
-                ar_term = 0
+                ma_features = torch.zeros(batch_size, self.q)
                 
-            # MA component
-            if self.q > 0 and len(residuals) >= self.q:
-                ma_term = torch.sum(torch.stack(residuals[-self.q:], dim=1) * self.ma_coef, dim=1)
-            else:
-                ma_term = 0
-                
-            # Feature component
-            if features is not None and self.feature_weights is not None:
-                feat_term = torch.sum(features[:, i] * self.feature_weights, dim=1)
-            else:
-                feat_term = 0
-                
-            # Combine components
-            pred = ar_term + ma_term + feat_term + self.bias
+            # Combine AR and MA features
+            combined_features = torch.cat([ar_features, ma_features], dim=1)
+            
+            # Add external features if available
+            if features is not None:
+                feat = features.data[:, i, :]
+                combined_features = torch.cat([combined_features, feat], dim=1)
+            
+            # Neural network forward pass
+            combined_features = Tensor(combined_features)
+            h1 = self.relu(self.fc1(combined_features))
+            h2 = self.relu(self.fc2(h1))
+            pred = self.fc3(h2)
+            
             predictions.append(pred)
             
-            # Calculate residual
-            if i < x.shape[1]:
-                residual = x[:, i] - pred
-                residuals.append(residual)
+            # Calculate error for MA component
+            if i < seq_length - 1:
+                error = x[:, i+1] - pred.data[:, 0]
+                errors.append(error)
         
-        predictions = torch.stack(predictions, dim=1)
+        # Stack predictions
+        predictions = torch.stack([p.data for p in predictions], dim=1)
+        predictions = Tensor(predictions)
         
         # Inverse differencing if needed
         if self.d > 0:
-            predictions = self.inverse_difference(predictions, x_orig, self.d)
+            predictions = self.inverse_difference(predictions, x_orig[:, -self.output_steps:])
             
-        return predictions
+        return predictions.unsqueeze(-1)
 
 
 class LiteTCN(BaseModel):

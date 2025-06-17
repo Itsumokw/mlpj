@@ -13,6 +13,21 @@ from src.visualization.plotter import plot_predictions, plot_training_curves
 from src.core.optim import Adam  # Add this import
 from src.core.nn.loss import MSELoss  # Add this import
 from src.core.tensor import Tensor  # Add this import
+import kagglehub
+from kagglehub import KaggleDatasetAdapter
+import pandas as pd
+
+# Set the path to the file you'd like to load
+
+# path = kagglehub.dataset_download("rakannimer/AirPassengers")
+# print("Path to dataset files:", path)
+# Load the latest version
+# file_path = "C:\\Users\\Administrator\\.cache\\kagglehub\\datasets\\rakannimer\\air-passengers\\versions\\1\\AirPassengers.csv"
+# print("File path:", file_path)
+
+# hf_dataset = pd.read_csv(file_path)
+
+# print("Hugging Face Dataset:", hf_dataset)
 
 def train_and_evaluate(model_name: str, model, train_loader, val_loader, test_loader,
                       feature_extractor, scaler, device='cpu'):
@@ -37,11 +52,13 @@ def train_and_evaluate(model_name: str, model, train_loader, val_loader, test_lo
         model.train()
         epoch_loss = 0
         for batch_idx, (x, y) in enumerate(train_loader):
-            # Extract features if needed
+            # Extract features only from passenger data (first column)
             if feature_extractor is not None:
-                x_numpy = x.numpy() if hasattr(x, 'numpy') else x.cpu().numpy()
-                features = feature_extractor.transform(x_numpy)
-                features = Tensor(features)  # Convert to our Tensor class
+                x_numpy = x.numpy()
+                # Extract passenger count column for feature extraction
+                passenger_data = x_numpy[:, :, 0:1]  # Keep the last dimension
+                features = feature_extractor.transform(passenger_data)
+                features = Tensor(features)
             else:
                 features = None
             
@@ -84,8 +101,9 @@ def train_and_evaluate(model_name: str, model, train_loader, val_loader, test_lo
                 # Extract features if needed
                 if feature_extractor is not None:
                     x_numpy = x.numpy() if hasattr(x, 'numpy') else x.cpu().numpy()
-                    features = feature_extractor.transform(x_numpy)
-                    features = Tensor(features)  # Use our Tensor class
+                    passenger_data = x_numpy[:, :, 0:1]
+                    features = feature_extractor.transform(passenger_data)
+                    features = Tensor(features)
                 else:
                     features = None
                 
@@ -119,7 +137,8 @@ def train_and_evaluate(model_name: str, model, train_loader, val_loader, test_lo
         for x, y in test_loader:
             if feature_extractor is not None:
                 x_numpy = x.numpy() if hasattr(x, 'numpy') else x.numpy()
-                features = feature_extractor.transform(x_numpy)
+                passenger_data = x_numpy[:, :, 0:1]
+                features = feature_extractor.transform(passenger_data)
                 features = Tensor(features)
             else:
                 features = None
@@ -154,56 +173,110 @@ def train_and_evaluate(model_name: str, model, train_loader, val_loader, test_lo
     }
 
 def main():
-    # Set random seeds
-    torch.manual_seed(42)
-    np.random.seed(42)
+    # Load and preprocess data
+    file_path = "C:\\Users\\Administrator\\.cache\\kagglehub\\datasets\\rakannimer\\air-passengers\\versions\\1\\AirPassengers.csv"
+    df = pd.read_csv(file_path)
     
-    # Generate synthetic data
-    t = np.linspace(0, 100, 1000)
-    data = np.sin(0.1 * t) + 0.1 * np.sin(0.5 * t) + np.random.normal(0, 0.1, 1000)
+    # Convert Month column to datetime
+    df['Month'] = pd.to_datetime(df['Month'])
     
-    # Data preprocessing
+    # Extract time features
+    df['year'] = df['Month'].dt.year
+    df['month'] = df['Month'].dt.month
+    df['year_progress'] = (df['month'] - 1) / 12  # Normalized month position in year
+    
+    # Create seasonal features
+    df['sin_month'] = np.sin(2 * np.pi * df['month'] / 12)
+    df['cos_month'] = np.cos(2 * np.pi * df['month'] / 12)
+    
+    # Convert passengers data to float and reshape
+    passengers_data = df['#Passengers'].values.astype(np.float32).reshape(-1, 1)
+    
+    # Normalize passenger numbers
     scaler = StandardScaler()
-    data_scaled = scaler.fit_transform(data.reshape(-1, 1))
+    passengers_scaled = scaler.fit_transform(passengers_data)
     
-    # Create datasets
-    window_size = 50
-    prediction_steps = 10
-    train_size = int(0.7 * len(data_scaled))
-    val_size = int(0.15 * len(data_scaled))
+    # Prepare sequences
+    def create_sequences(data, time_features, window_size, prediction_steps):
+        X, y = [], []
+        for i in range(len(data) - window_size - prediction_steps + 1):
+            # Input sequence includes passenger numbers and time features
+            features = np.concatenate([
+                data[i:i+window_size],
+                time_features[i:i+window_size]
+            ], axis=1)
+            
+            # Target sequence is next prediction_steps passenger numbers
+            target = data[i+window_size:i+window_size+prediction_steps]
+            
+            X.append(features)
+            y.append(target)
+        return np.array(X), np.array(y)
+    
+    # Create time features array
+    time_features = np.column_stack([
+        df['year_progress'].values,
+        df['sin_month'].values,
+        df['cos_month'].values
+    ])
+    
+    # Adjust window size and prediction steps
+    window_size = 24  # Increase window size to have enough historical data
+    prediction_steps = 6  # Decrease prediction steps to ensure we have enough data
+    
+    # Create sequences with adjusted parameters
+    X, y = create_sequences(passengers_scaled, time_features, window_size, prediction_steps)
     
     # Split data
-    train_data = data_scaled[:train_size]
-    val_data = data_scaled[train_size:train_size+val_size]
-    test_data = data_scaled[train_size+val_size:]
+    train_size = int(0.7 * len(X))
+    val_size = int(0.15 * len(X))
+    
+    X_train = X[:train_size]
+    y_train = y[:train_size]
+    X_val = X[train_size:train_size+val_size]
+    y_val = y[train_size:train_size+val_size]
+    X_test = X[train_size+val_size:]
+    y_test = y[train_size+val_size:]
     
     # Create datasets
-    train_dataset = TimeSeriesDataset(train_data, window_size, prediction_steps)
-    val_dataset = TimeSeriesDataset(val_data, window_size, prediction_steps)
-    test_dataset = TimeSeriesDataset(test_data, window_size, prediction_steps)
+    train_dataset = TimeSeriesDataset(X_train, y_train)
+    val_dataset = TimeSeriesDataset(X_val, y_val)
+    test_dataset = TimeSeriesDataset(X_test, y_test)
     
     # Create dataloaders
-    batch_size = 32
+    batch_size = 16  # Smaller batch size for this dataset
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
     test_loader = DataLoader(test_dataset, batch_size=batch_size)
     
     # Initialize feature extractor
     feature_extractor = FeatureExtractor(window_size)
-    feature_dim = feature_extractor.feature_size()  # Get feature dimension
+    feature_dim = feature_extractor.feature_size()
     
-    # Define models to test
+    # Define models with adjusted parameters
     models = {
-        'SimpleARIMA': SimpleARIMA(p=5, feature_size=feature_dim, output_steps=prediction_steps),
-        'ARIMA': ARIMA(p=2, d=1, q=1, feature_size=feature_dim),
-        'LiteTCN': LiteTCN(input_size=1, feature_size=feature_dim),
-        'EnhancedTCN': EnhancedTCN(input_size=1, feature_size=feature_dim),
-        'TimeCNN': TimeCNN(input_size=1, feature_size=feature_dim),
-        'TimeGRU': TimeGRU(input_size=1, feature_size=feature_dim),
-        'AdvancedTCN': AdvancedTCN(input_size=1, feature_size=feature_dim)
+        'ARIMA': ARIMA(
+            p=12,  # Keep seasonal AR order
+            d=1,   # Keep first-order differencing
+            q=1,   # Keep first-order MA
+            feature_size=feature_dim,
+            output_steps=prediction_steps  # Use adjusted prediction steps
+        ),
+        'TimeGRU': TimeGRU(
+            input_size=1,
+            feature_size=feature_dim,
+            hidden_size=64,
+            num_layers=2
+        ),
+        'AdvancedTCN': AdvancedTCN(
+            input_size=1,
+            feature_size=feature_dim,
+            hidden_size=32,
+            num_layers=3
+        )
     }
     
-    # Train and evaluate all models
+    # Train and evaluate models
     results = {}
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     

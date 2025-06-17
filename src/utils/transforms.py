@@ -20,8 +20,11 @@ class StandardScaler(BaseTransform):
         self.std = None
         
     def fit(self, data: Union[np.ndarray, torch.Tensor]) -> 'StandardScaler':
+        # Convert to torch tensor and ensure float type
         if isinstance(data, np.ndarray):
             data = torch.from_numpy(data)
+        data = data.float()  # Convert to float
+        
         self.mean = data.mean(dim=0, keepdim=True)
         self.std = data.std(dim=0, keepdim=True) + 1e-8
         return self
@@ -29,13 +32,18 @@ class StandardScaler(BaseTransform):
     def transform(self, data: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         if self.mean is None or self.std is None:
             raise ValueError("Scaler not fitted")
+            
+        # Convert to torch tensor and ensure float type
         if isinstance(data, np.ndarray):
             data = torch.from_numpy(data)
+        data = data.float()  # Convert to float
+        
         return (data - self.mean) / self.std
         
     def inverse_transform(self, data: Union[np.ndarray, torch.Tensor]) -> torch.Tensor:
         if isinstance(data, np.ndarray):
             data = torch.from_numpy(data)
+        data = data.float()  # Convert to float
         return data * self.std + self.mean
 
 class MinMaxScaler(BaseTransform):
