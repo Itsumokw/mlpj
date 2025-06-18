@@ -208,7 +208,7 @@ payload = {
 1. **启动后端服务**：
    ```bash
    cd backend
-   uvicorn main:app --reload --port 8000
+   uvicorn main:app --reload --port 8080
    ```
 
 2. **前端操作流程**：

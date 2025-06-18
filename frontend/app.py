@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 from components.sidebar import render_sidebar
-from components.data_view import show_data_preview
+from components.data_view import show_data_preview, show_differenced_data
 from components.training_view import show_training_in_progress, show_training_results
 from components.forecast_view import show_forecast_results
 from api_client import preprocess_data, train_model, get_training_status, forecast
@@ -47,6 +47,16 @@ if st.session_state.model_config and st.session_state.model_config.get('show_dat
             st.info("Please upload a dataset and select columns in the sidebar to view data preview")
         else:
             st.info("Data preview will be available after configuration")
+if st.session_state.model_config and st.session_state.model_config.get('show_diff'):
+    # 只有在配置完整时才尝试显示预览
+    if 'time_col' in st.session_state.model_config and 'value_col' in st.session_state.model_config:
+        show_differenced_data(st.session_state.model_config)
+    else:
+        # 提供友好的提示信息
+        if st.session_state.model_config.get('dataset') == "Upload Custom Dataset":
+            st.info("Please upload a dataset and select columns in the sidebar to view data preview")
+        else:
+            st.info("Differenced Data will be available after configuration")
 
 # 处理训练按钮
 if st.session_state.get('train_button_clicked'):

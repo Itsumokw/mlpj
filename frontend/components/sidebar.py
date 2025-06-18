@@ -16,7 +16,6 @@ def render_sidebar():
             "Enhanced TCN": "EnhancedTCN",
             "Advanced TCN": "AdvancedTCN",
             "Time GRU": "TimeGRU",
-            "Time CNN": "TimeCNN",
             "Time Linear": "TimeLinear"
         }
 
@@ -76,7 +75,6 @@ def render_sidebar():
             "Enhanced TCN": "TCN with residual connections and dilated convolutions for longer sequences",
             "Advanced TCN": "TCN with attention mechanisms for capturing complex patterns",
             "Time GRU": "GRU-based recurrent model for sequential time series data",
-            "Time CNN": "Convolutional Neural Network specialized for time series",
             "Time Linear": "Linear model with time-based features"
         }
         st.info(model_descriptions[selected_model])
