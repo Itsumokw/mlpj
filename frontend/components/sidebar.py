@@ -179,6 +179,28 @@ def render_sidebar():
 
         st.divider()
 
+        # 数据选项
+        st.subheader("Data Options")
+        show_data = st.checkbox(
+            "Show Raw Data",
+            session_config.get("show_data", True)  # 使用get避免KeyError
+        )
+        config["show_data"] = show_data
+
+        show_diff = st.checkbox(
+            "Show Differenced Data",
+            session_config.get("show_diff", False)  # 使用get避免KeyError
+        )
+        config["show_diff"] = show_diff
+
+        # 预测选项
+        st.subheader("Forecasting Options")
+        forecast_months = st.slider(
+            "Months to Forecast", 1, 36,
+            session_config.get("forecast_months", 12), 1  # 使用get避免KeyError
+        )
+        config["forecast_months"] = forecast_months
+
         # 通用模型参数配置
         st.subheader("Model Parameters")
 
@@ -276,27 +298,7 @@ def render_sidebar():
 
         st.divider()
 
-        # 数据选项
-        st.subheader("Data Options")
-        show_data = st.checkbox(
-            "Show Raw Data",
-            session_config.get("show_data", True)  # 使用get避免KeyError
-        )
-        config["show_data"] = show_data
 
-        show_diff = st.checkbox(
-            "Show Differenced Data",
-            session_config.get("show_diff", False)  # 使用get避免KeyError
-        )
-        config["show_diff"] = show_diff
-
-        # 预测选项
-        st.subheader("Forecasting Options")
-        forecast_months = st.slider(
-            "Months to Forecast", 1, 36,
-            session_config.get("forecast_months", 12), 1  # 使用get避免KeyError
-        )
-        config["forecast_months"] = forecast_months
 
         # 训练按钮
         if st.button("🚀 Train Model"):
