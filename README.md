@@ -97,7 +97,7 @@ time-series-forecast-lab/
 
 支持两种数据源：
 1. **内置数据集**：Air Passengers (1949-1960)
-2. **自定义数据集**：上传CSV文件并指定时间列和数值列
+2. **自定义数据集**：上传CSV文件并指定时间列和数值列(可使用datasets里已有的jena_climate_cut和AirPassenger数据集测试)
 
 ### 3. 数据探索
 
