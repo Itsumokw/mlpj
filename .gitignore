@@ -4,3 +4,4 @@ src/core/nn/__pycache__/*
 src/data/__pycache__/*
 src/utils/__pycache__/*
 src/visualization/__pycache__/*
+frontend/components/__pycache__/*
