@@ -1,5 +1,5 @@
 from schemas import PreprocessRequest, PreprocessResponse
-from backend.utils import preprocess_data, create_arima_features, extract_month_features
+from utils import preprocess_data, create_arima_features, extract_month_features
 import numpy as np
 from typing import Dict
 import logging
