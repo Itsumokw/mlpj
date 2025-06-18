@@ -30,33 +30,90 @@ if 'training_results' not in st.session_state:
 if 'forecast_results' not in st.session_state:
     st.session_state.forecast_results = None
 
+# 存储配置快照用于检测变更
+if 'config_snapshot' not in st.session_state:
+    st.session_state.config_snapshot = None
+
 # 渲染侧边栏并获取配置
 model_config = render_sidebar()
+
+
+# 检查关键配置是否变更
+def config_changed(new_config, old_snapshot):
+    """检查关键配置是否发生变更"""
+    if old_snapshot is None:
+        return True
+
+    # 检查关键字段
+    key_fields = ['dataset', 'time_col', 'value_col', 'model_type',
+                  'window_size', 'horizon', 'use_exog', 'exog_columns']
+
+    for field in key_fields:
+        if field in new_config and field in old_snapshot:
+            if new_config[field] != old_snapshot[field]:
+                return True
+
+    # 检查上传文件是否变更
+    if new_config.get('dataset') == "Upload Custom Dataset":
+        new_file = new_config.get('uploaded_file')
+        old_file = old_snapshot.get('uploaded_file')
+
+        # 检查文件是否变更
+        if new_file and old_file:
+            if new_file.name != old_file.name or new_file.size != old_file.size:
+                return True
+        elif new_file != old_file:  # 一个存在一个不存在
+            return True
+
+    return False
+
+
+# 创建当前配置的快照（仅包含关键字段）
+current_snapshot = {
+    'dataset': model_config.get('dataset'),
+    'time_col': model_config.get('time_col'),
+    'value_col': model_config.get('value_col'),
+    'model_type': model_config.get('model_type'),
+    'window_size': model_config.get('window_size'),
+    'horizon': model_config.get('horizon'),
+    'use_exog': model_config.get('use_exog'),
+    'exog_columns': model_config.get('exog_columns'),
+    'uploaded_file': model_config.get('uploaded_file')
+}
+
+# 如果配置变更，重置训练和预测结果
+if config_changed(model_config, st.session_state.config_snapshot):
+    st.session_state.training_job_id = None
+    st.session_state.training_results = None
+    st.session_state.forecast_results = None
+    st.session_state.preprocessed_data = None
+    st.session_state.train_button_clicked = False
+
+    # 更新配置快照
+    st.session_state.config_snapshot = current_snapshot
 
 # 保存配置到session state
 st.session_state.model_config = model_config
 
-# 显示数据预览 - 添加安全检查
+# 显示数据预览
 if st.session_state.model_config and st.session_state.model_config.get('show_data'):
-    # 只有在配置完整时才尝试显示预览
     if 'time_col' in st.session_state.model_config and 'value_col' in st.session_state.model_config:
         show_data_preview(st.session_state.model_config)
     else:
-        # 提供友好的提示信息
         if st.session_state.model_config.get('dataset') == "Upload Custom Dataset":
             st.info("Please upload a dataset and select columns in the sidebar to view data preview")
         else:
             st.info("Data preview will be available after configuration")
+
+# 显示差分数据
 if st.session_state.model_config and st.session_state.model_config.get('show_diff'):
-    # 只有在配置完整时才尝试显示预览
     if 'time_col' in st.session_state.model_config and 'value_col' in st.session_state.model_config:
         show_differenced_data(st.session_state.model_config)
     else:
-        # 提供友好的提示信息
         if st.session_state.model_config.get('dataset') == "Upload Custom Dataset":
-            st.info("Please upload a dataset and select columns in the sidebar to view data preview")
+            st.info("Please upload a dataset and select columns in the sidebar to view differenced data")
         else:
-            st.info("Differenced Data will be available after configuration")
+            st.info("Differenced data will be available after configuration")
 
 # 处理训练按钮
 if st.session_state.get('train_button_clicked'):
@@ -71,7 +128,6 @@ if st.session_state.get('train_button_clicked'):
         required_keys = ['X_train', 'y_train', 'X_test', 'y_test', 'scaler', 'last_values', 'dates']
         if not all(key in preprocessed_data for key in required_keys):
             st.error("Preprocessed data is missing required fields")
-            
 
         if preprocessed_data:
             st.session_state.preprocessed_data = preprocessed_data
