@@ -36,19 +36,18 @@
    ```bash
    cd backend
    uvicorn main:app --reload --port 8080
-   cd ../
+   
    ```
 
 2. **启动前端应用**：
    ```bash
-   cd frontend
-   streamlit run app.py
+   streamlit run frontend/app.py
    ```
 
   或者
 
    ```bash
-   python -m streamlit run ./frontend/app.py
+   python -m streamlit run frontend/app.py
    ``` 
    
 
