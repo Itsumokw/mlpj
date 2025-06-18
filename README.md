@@ -43,9 +43,7 @@
    ```bash
    streamlit run frontend/app.py
    ```
-
-  或者
-
+   或者
    ```bash
    python -m streamlit run frontend/app.py
    ``` 
